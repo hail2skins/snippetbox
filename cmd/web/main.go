@@ -1,11 +1,42 @@
 package main
 
 import (
-	"log"
+	"flag"
+	"log/slog"
 	"net/http"
+	"os"
 )
 
+// Define an application struct to hold the application-wide dependencies for the
+// web application. For now we'll only include the structured logger, but we'll add
+// more to it as the build progresses.
+type application struct {
+	logger *slog.Logger
+}
+
 func main() {
+	// Define a new command-line flag with the name 'addr', a default value of ":4000"
+	// and some short help text explaining what the flag controls. The value of the
+	// flag will be stored in the addr variable at runtime.
+	addr := flag.String("addr", ":4000", "HTTP network address")
+
+	// Importantly, we use the flag.Parse() function to parse the command-line flag.
+	// This reads in the command-line flag value and assigns it to the addr variable.
+	// You need to call this before you use the addr variable
+	// otherwise it will always contain the default value of ":4000".
+	// If any errors are encountered during parsing the application will be terminated.
+	flag.Parse()
+
+	// Use the slog.New() function to initialize a new structured logger, which
+	// writes to the standard out stream and uses the default settings.
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+
+	// Initialize a new instance of our application struct, containing the
+	// dependencies (for now, just the structured logger).
+	app := &application{
+		logger: logger,
+	}
+
 	mux := http.NewServeMux()
 
 	// Create a file server which serves files out of the "./ui/static" directory.
@@ -18,13 +49,18 @@ func main() {
 	// "/static" prefix before the request reaches the file server.
 	mux.Handle("GET /static/", http.StripPrefix("/static", fileServer))
 
-	mux.HandleFunc("GET /{$}", home)
-	mux.HandleFunc("GET /snippet/view/{id}", snippetView)
-	mux.HandleFunc("GET /snippet/create", snippetCreate)
-	mux.HandleFunc("POST /snippet/create", snippetCreatePost)
+	// Swap the route declarations to use the application struct's methods as the
+	// handler functions.
+	mux.HandleFunc("GET /{$}", app.home)
+	mux.HandleFunc("GET /snippet/view/{id}", app.snippetView)
+	mux.HandleFunc("GET /snippet/create", app.snippetCreate)
+	mux.HandleFunc("POST /snippet/create", app.snippetCreatePost)
 
-	log.Println("Starting server on :4000")
+	// Use the Info() method to log the starting server message at Info severity
+	// along with the listen address as an attribute.
+	logger.Info("starting server", "addr", *addr)
 
-	err := http.ListenAndServe(":4000", mux)
-	log.Fatal(err)
+	err := http.ListenAndServe(*addr, app.routes())
+	logger.Error(err.Error())
+	os.Exit(1)
 }
