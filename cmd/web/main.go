@@ -1,10 +1,13 @@
 package main
 
 import (
+	"database/sql"
 	"flag"
 	"log/slog"
 	"net/http"
 	"os"
+
+	_ "github.com/lib/pq"
 )
 
 // Define an application struct to hold the application-wide dependencies for the
@@ -15,52 +18,45 @@ type application struct {
 }
 
 func main() {
-	// Define a new command-line flag with the name 'addr', a default value of ":4000"
-	// and some short help text explaining what the flag controls. The value of the
-	// flag will be stored in the addr variable at runtime.
 	addr := flag.String("addr", ":4000", "HTTP network address")
 
-	// Importantly, we use the flag.Parse() function to parse the command-line flag.
-	// This reads in the command-line flag value and assigns it to the addr variable.
-	// You need to call this before you use the addr variable
-	// otherwise it will always contain the default value of ":4000".
-	// If any errors are encountered during parsing the application will be terminated.
+	dsn := flag.String("dsn", "host=localhost port=5432 user=web password=pass dbname=snippetbox sslmode=disable", "PostgreSQL data source name")
+
 	flag.Parse()
 
-	// Use the slog.New() function to initialize a new structured logger, which
-	// writes to the standard out stream and uses the default settings.
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	// Initialize a new instance of our application struct, containing the
-	// dependencies (for now, just the structured logger).
+	db, err := openDB(*dsn)
+	if err != nil {
+		logger.Error(err.Error())
+		os.Exit(1)
+	}
+	defer db.Close()
+
 	app := &application{
 		logger: logger,
 	}
 
-	mux := http.NewServeMux()
-
-	// Create a file server which serves files out of the "./ui/static" directory.
-	// Note that the path given to the http.Dir function is relative to the project
-	// directory root.
-	fileServer := http.FileServer(http.Dir("./ui/static"))
-
-	// Use the mux.Handle() function to register the file server as the handler for
-	// all URL paths that start with "/static/". For matching paths, we strip the
-	// "/static" prefix before the request reaches the file server.
-	mux.Handle("GET /static/", http.StripPrefix("/static", fileServer))
-
-	// Swap the route declarations to use the application struct's methods as the
-	// handler functions.
-	mux.HandleFunc("GET /{$}", app.home)
-	mux.HandleFunc("GET /snippet/view/{id}", app.snippetView)
-	mux.HandleFunc("GET /snippet/create", app.snippetCreate)
-	mux.HandleFunc("POST /snippet/create", app.snippetCreatePost)
-
-	// Use the Info() method to log the starting server message at Info severity
-	// along with the listen address as an attribute.
 	logger.Info("starting server", "addr", *addr)
 
-	err := http.ListenAndServe(*addr, app.routes())
+	// Call the new app.routes() method to get the servemux containing our routes,
+	// and pass that to http.ListenAndServe().
+	err = http.ListenAndServe(*addr, app.routes())
 	logger.Error(err.Error())
 	os.Exit(1)
+}
+
+func openDB(dsn string) (*sql.DB, error) {
+	db, err := sql.Open("postgres", dsn)
+	if err != nil {
+		return nil, err
+	}
+
+	err = db.Ping()
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+
+	return db, nil
 }
