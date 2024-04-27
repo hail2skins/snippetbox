@@ -7,6 +7,9 @@ import (
 	"net/http"
 	"os"
 
+	// Import the models package from the module internals directory.
+	"github.com/hail2skins/snippetbox/internal/models"
+
 	_ "github.com/lib/pq"
 )
 
@@ -14,7 +17,8 @@ import (
 // web application. For now we'll only include the structured logger, but we'll add
 // more to it as the build progresses.
 type application struct {
-	logger *slog.Logger
+	logger   *slog.Logger
+	snippets *models.SnippetModel
 }
 
 func main() {
@@ -33,8 +37,12 @@ func main() {
 	}
 	defer db.Close()
 
+	// Initialize a new instance of SnippetModel and add it to the application
+	snippetModel := &models.SnippetModel{DB: db}
+
 	app := &application{
-		logger: logger,
+		logger:   logger,
+		snippets: snippetModel,
 	}
 
 	logger.Info("starting server", "addr", *addr)
