@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 
-	//"html/template"
 	"net/http"
 	"strconv"
 
@@ -22,26 +21,13 @@ func (app *application) home(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	for _, snippet := range snippets {
-		fmt.Fprintf(w, "%+v\n", snippet)
-	}
+	// Call the newTemplateData() and add the snippets to it:
+	data := app.newTemplateData(r)
+	data.Snippets = snippets
 
-	// files := []string{
-	//     "./ui/html/base.tmpl",
-	//     "./ui/html/partials/nav.tmpl",
-	//     "./ui/html/pages/home.tmpl",
-	// }
+	// Use the new render helper.
+	app.render(w, r, http.StatusOK, "home.tmpl", data)
 
-	// ts, err := template.ParseFiles(files...)
-	// if err != nil {
-	//     app.serverError(w, r, err)
-	//     return
-	// }
-
-	// err = ts.ExecuteTemplate(w, "base", nil)
-	// if err != nil {
-	//     app.serverError(w, r, err)
-	// }
 }
 
 // Change the signature of the snippetView handler so it is defined as a method
@@ -66,8 +52,13 @@ func (app *application) snippetView(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Write the snippet data as a plain-text HTTP response body.
-	fmt.Fprintf(w, "%v", snippet)
+	// Call the newTemplateData() helper and pass the snippet data to it.
+	data := app.newTemplateData(r)
+	data.Snippet = snippet
+
+	// Use the new render helper.
+	app.render(w, r, http.StatusOK, "view.tmpl", data)
+
 }
 
 // Change the signature of the snippetCreate handler so it is defined as a method
