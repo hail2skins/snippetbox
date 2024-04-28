@@ -11,6 +11,8 @@ import (
 	// Import the models package from the module internals directory.
 	"github.com/hail2skins/snippetbox/internal/models"
 
+	"github.com/go-playground/form"
+
 	_ "github.com/lib/pq"
 )
 
@@ -21,6 +23,7 @@ type application struct {
 	logger        *slog.Logger
 	snippets      *models.SnippetModel
 	templateCache map[string]*template.Template
+	formDecoder   *form.Decoder
 }
 
 func main() {
@@ -49,11 +52,15 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Initialize a new form decoder...
+	formDecoder := form.NewDecoder()
+
 	// And add it to the application dependencies.
 	app := &application{
 		logger:        logger,
 		snippets:      snippetModel,
 		templateCache: templateCache,
+		formDecoder:   formDecoder,
 	}
 
 	logger.Info("starting server", "addr", *addr)
