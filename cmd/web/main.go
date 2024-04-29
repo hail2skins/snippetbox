@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"database/sql"
 	"flag"
 	"html/template"
@@ -76,11 +77,32 @@ func main() {
 		sessionManager: sessionManager,
 	}
 
-	logger.Info("starting server", "addr", *addr)
+	// Initialize a tls.Config struct to hold the non-default TLS settings we want the server to use.
+	// In this case the only thing we're changing is the curve prferences value so that only elliptic curves with
+	// assembly implemtations are used
+	tlsConfig := &tls.Config{
+		CurvePreferences: []tls.CurveID{tls.X25519, tls.CurveP256},
+	}
 
-	// Call the new app.routes() method to get the servemux containing our routes,
-	// and pass that to http.ListenAndServe().
-	err = http.ListenAndServe(*addr, app.routes())
+	// Initialize a new http.Server struct. We set the Addr and Handler fields so
+	// that the server uses the same network address and routes as before.
+	srv := &http.Server{
+		Addr:    *addr,
+		Handler: app.routes(),
+		// Create a *log.Logger from our strutured logger handler which writes log entries at Error levek, and assign it to the Error Log field.
+		ErrorLog:  slog.NewLogLogger(logger.Handler(), slog.LevelError),
+		TLSConfig: tlsConfig,
+		// Set the Idle, Read and Write timeouts on the server to 10 seconds.
+		IdleTimeout:  time.Minute,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+	}
+
+	logger.Info("starting server", "addr", srv.Addr)
+
+	// Call the ListenAndServe() method on our new http.Server struct to start
+	// the server.
+	err = srv.ListenAndServeTLS("./tls/cert.pem", "./tls/key.pem")
 	logger.Error(err.Error())
 	os.Exit(1)
 }
