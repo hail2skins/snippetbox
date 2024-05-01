@@ -6,9 +6,6 @@ import (
 	"time"
 )
 
-// Define ErrNoRecord as a new error for when a database operation doesn't return any rows
-var ErrNoRecord = errors.New("models: no matching record found")
-
 type Snippet struct {
 	ID      int
 	Title   string

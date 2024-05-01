@@ -26,6 +26,7 @@ import (
 type application struct {
 	logger         *slog.Logger
 	snippets       *models.SnippetModel
+	users          *models.UserModel
 	templateCache  map[string]*template.Template
 	formDecoder    *form.Decoder
 	sessionManager *scs.SessionManager
@@ -50,6 +51,9 @@ func main() {
 	// Initialize a new instance of SnippetModel and add it to the application
 	snippetModel := &models.SnippetModel{DB: db}
 
+	// Initialize a new instance of a UserModel and add it to the application
+	user := &models.UserModel{DB: db}
+
 	// Initialize a new template cache...
 	templateCache, err := newTemplateCache()
 	if err != nil {
@@ -72,6 +76,7 @@ func main() {
 	app := &application{
 		logger:         logger,
 		snippets:       snippetModel,
+		users:          user,
 		templateCache:  templateCache,
 		formDecoder:    formDecoder,
 		sessionManager: sessionManager,
