@@ -29,27 +29,11 @@ func main() {
 		logger: logger,
 	}
 
-	mux := http.NewServeMux()
-
-	// Create a file server which serves files out of the "./ui/static" directory.
-	fileServer := http.FileServer(http.Dir("./ui/static/"))
-
-	// Use the mux.Handle() function to register the file server as the handler for
-	// all URL paths that start with "/static/". For matching paths, we strip the
-	// "/static" prefix before the request reaches the file server.
-	mux.Handle("/static/", http.StripPrefix("/static", fileServer))
-
-	mux.HandleFunc("GET /{$}", app.home)
-	mux.HandleFunc("GET /snippet/view/{id}", app.snippetView)
-	mux.HandleFunc("GET /snippet/create", app.snippetCreate)
-	mux.HandleFunc("POST /snippet/create", app.snippetCreatePost)
-
 	// Use the Infi() method to log the starting server message at Info severity along with the listen address as an attribute
 	logger.Info("starting server", "addr", *addr)
 
-	err := http.ListenAndServe(*addr, mux)
-
-	// And we also use the Error() method to log any error message returned by the http.ListenAndServe() function
+	// Call the new app.routes() method to get the servemux containing our routes
+	err := http.ListenAndServe(*addr, app.routes())
 	logger.Error(err.Error())
 	os.Exit(1)
 }

@@ -21,17 +21,14 @@ func (app *application) home(w http.ResponseWriter, r *http.Request) {
 	// Use the template.ParseFiles() function to read the files and build a template set.
 	ts, err := template.ParseFiles(files...)
 	if err != nil {
-		// Because the home handler is now a method agaisnt the application struct it can access its fields including the logger.
-		app.logger.Error(err.Error(), "method", r.Method, "uri", r.URL.RequestURI())
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		app.serverError(w, r, err) // Use the serverError() helper.
 		return
 	}
 
 	// Use the ExecuteTemplate() method to write the template set with the specified name to the response body.
 	err = ts.ExecuteTemplate(w, "base", nil)
 	if err != nil {
-		app.logger.Error(err.Error(), "method", r.Method, "uri", r.URL.RequestURI())
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		app.serverError(w, r, err) // Use the serverError() helper.
 		return
 	}
 }
