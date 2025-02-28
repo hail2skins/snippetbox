@@ -1,39 +1,72 @@
 package main
 
 import (
+	"database/sql"
 	"flag"
 	"log/slog"
 	"net/http"
 	"os"
+
+	"github.com/hail2skins/snippetbox/internal/models"
+
+	_ "github.com/go-sql-driver/mysql"
 )
 
 // Define an application struct to hold the application-wide dependencies for the web application.
 type application struct {
-	logger *slog.Logger
+	logger   *slog.Logger
+	snippets *models.SnippetModel
 }
 
 func main() {
-
-	// Define a new command-line flag with the name 'addr', a default value of ":4000" and some short help text explaining what the flag controls
 	addr := flag.String("addr", ":4000", "HTTP network address")
-
-	// We use flag.Parse() to parse the command line flag.
-	// flag.Parse() will update the value of addr which we then pass to the http.ListenAndServe() function.
+	// Define a new command-line flag for the MySQL DSN string.
+	dsn := flag.String("dsn", "web:YourStrongPassword123!@/snippetbox?parseTime=true", "MySQL data source name")
 	flag.Parse()
 
-	// Use the slog.New() function to initialize a new structured logger, which is used to log messages with different severity levels.
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	// Initialize a new instance of application containing the dependencies.
-	app := &application{
-		logger: logger,
+	// To keep the main() function tidy I've put the code for creating a connection
+	// pool into the separate openDB() function below. We pass openDB() the DSN
+	// from the command-line flag.
+	db, err := openDB(*dsn)
+	if err != nil {
+		logger.Error(err.Error())
+		os.Exit(1)
 	}
 
-	// Use the Infi() method to log the starting server message at Info severity along with the listen address as an attribute
+	// We also defer a call to db.Close(), so that the connection pool is closed
+	// before the main() function exits.
+	defer db.Close()
+
+	app := &application{
+		logger:   logger,
+		snippets: &models.SnippetModel{DB: db},
+	}
+
 	logger.Info("starting server", "addr", *addr)
 
-	// Call the new app.routes() method to get the servemux containing our routes
-	err := http.ListenAndServe(*addr, app.routes())
+	// Because the err variable is now already declared in the code above, we need
+	// to use the assignment operator = here, instead of the := 'declare and assign'
+	// operator.
+	err = http.ListenAndServe(*addr, app.routes())
 	logger.Error(err.Error())
 	os.Exit(1)
+}
+
+// The openDB() function wraps sql.Open() and returns a sql.DB connection pool
+// for a given DSN.
+func openDB(dsn string) (*sql.DB, error) {
+	db, err := sql.Open("mysql", dsn)
+	if err != nil {
+		return nil, err
+	}
+
+	err = db.Ping()
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+
+	return db, nil
 }
