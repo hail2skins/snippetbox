@@ -3,7 +3,8 @@ package main
 import (
 	"errors"
 	"fmt"
-	"html/template"
+
+	//"html/template"
 	"net/http"
 	"strconv"
 
@@ -14,26 +15,16 @@ import (
 func (app *application) home(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Server", "Go")
 
-	// Initialize a slice containing the paths to the two files noting that the file containing our base template must be first in the slice.
-	files := []string{
-		"./ui/html/base.tmpl",
-		"./ui/html/partials/nav.tmpl",
-		"./ui/html/pages/home.tmpl",
-	}
-
-	// Use the template.ParseFiles() function to read the files and build a template set.
-	ts, err := template.ParseFiles(files...)
+	snippets, err := app.snippets.Latest()
 	if err != nil {
-		app.serverError(w, r, err) // Use the serverError() helper.
+		app.serverError(w, r, err)
 		return
 	}
 
-	// Use the ExecuteTemplate() method to write the template set with the specified name to the response body.
-	err = ts.ExecuteTemplate(w, "base", nil)
-	if err != nil {
-		app.serverError(w, r, err) // Use the serverError() helper.
-		return
-	}
+	// Use the new render helper.
+	app.render(w, r, http.StatusOK, "home.tmpl", templateData{
+		Snippets: snippets,
+	})
 }
 
 func (app *application) snippetView(w http.ResponseWriter, r *http.Request) {
@@ -55,9 +46,11 @@ func (app *application) snippetView(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	// Use the new render helper.
+	app.render(w, r, http.StatusOK, "view.tmpl", templateData{
+		Snippet: snippet,
+	})
 
-	// Write the snippet data as a plain-text HTTP response body.
-	fmt.Fprintf(w, "%+v", snippet)
 }
 
 // Change the signature of the snippetCreate handler so it is defined as a method
