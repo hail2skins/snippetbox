@@ -1,23 +1,31 @@
 package main
 
 import (
+	"crypto/tls"
 	"database/sql"
 	"flag"
 	"html/template"
 	"log/slog"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/hail2skins/snippetbox/internal/models"
 
+	"github.com/alexedwards/scs/mysqlstore"
+	"github.com/alexedwards/scs/v2"
+	"github.com/go-playground/form/v4"
 	_ "github.com/go-sql-driver/mysql"
 )
 
 // Define an application struct to hold the application-wide dependencies for the web application.
 type application struct {
-	logger        *slog.Logger
-	snippets      *models.SnippetModel
-	templateCache map[string]*template.Template
+	logger         *slog.Logger
+	snippets       models.SnippetModelInterface
+	users          models.UserModelInterface
+	templateCache  map[string]*template.Template
+	formDecoder    *form.Decoder
+	sessionManager *scs.SessionManager
 }
 
 func main() {
@@ -48,18 +56,54 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Initialize a decoder instance...
+	formDecoder := form.NewDecoder()
+
+	// Use the scs.New() function to initialize a new session manager. Then we
+	// configure it to use our MySQL database as the session store, and set a
+	// lifetime of 12 hours (so that sessions automatically expire 12 hours
+	// after first being created).
+	sessionManager := scs.New()
+	sessionManager.Store = mysqlstore.New(db)
+	sessionManager.Lifetime = 12 * time.Hour
+	// Make sure the Secure attribute is set on the cookie, telling the browser
+	// to only send the cookie over HTTPS connections.
+	sessionManager.Cookie.Secure = true
+
+	// Initialize a models.UserModel instance and add it to the application
+	// dependencies.
 	app := &application{
-		logger:        logger,
-		snippets:      &models.SnippetModel{DB: db},
-		templateCache: templateCache,
+		logger:         logger,
+		snippets:       &models.SnippetModel{DB: db},
+		users:          &models.UserModel{DB: db},
+		templateCache:  templateCache,
+		formDecoder:    formDecoder,
+		sessionManager: sessionManager,
 	}
 
-	logger.Info("starting server", "addr", *addr)
+	// Initialize a tls.Config struct to hold the non-default TLS settings we
+	// want the server to use. In this case the only thing that we're changing
+	// is the curve preferences value, so that only elliptic curves with
+	// assembly implementations are used.
+	tlsConfig := &tls.Config{
+		CurvePreferences: []tls.CurveID{tls.X25519, tls.CurveP256},
+	}
 
-	// Because the err variable is now already declared in the code above, we need
-	// to use the assignment operator = here, instead of the := 'declare and assign'
-	// operator.
-	err = http.ListenAndServe(*addr, app.routes())
+	// Set the server's TLSConfig field to use the tlsConfig variable we just
+	// created.
+	srv := &http.Server{
+		Addr:         *addr,
+		Handler:      app.routes(),
+		ErrorLog:     slog.NewLogLogger(logger.Handler(), slog.LevelError),
+		TLSConfig:    tlsConfig,
+		IdleTimeout:  time.Minute,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 30 * time.Second,
+	}
+
+	logger.Info("starting server", "addr", srv.Addr)
+
+	err = srv.ListenAndServeTLS("./tls/cert.pem", "./tls/key.pem")
 	logger.Error(err.Error())
 	os.Exit(1)
 }
